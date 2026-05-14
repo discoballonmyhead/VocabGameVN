@@ -6,18 +6,11 @@ import styles from './DeconstructPage.module.css';
 const DIFF_KEYS = ['all', 'easy', 'medium', 'hard'];
 const TYPE_CLS = { prefix: 'prefix', root: 'root', suffix: 'suffix', connector: 'connector' };
 
-// Build individual letter objects from the word string, preserving order.
-// Each letter knows which segment it belongs to.
 function initLetters(word) {
   const letters = [];
   word.segments.forEach((seg, segIdx) => {
     [...seg.letters].forEach((ch, pos) => {
-      letters.push({
-        id: `${segIdx}-${pos}-${ch}`,
-        char: ch,
-        segIdx,           // which segment this letter BELONGS to (the answer)
-        placed: null,     // null = in word row | segIdx = placed in that drop zone
-      });
+      letters.push({ id: `${segIdx}-${pos}-${ch}`, char: ch, segIdx, placed: null });
     });
   });
   return letters;
@@ -27,6 +20,8 @@ export default function DeconstructPage() {
   const { lang, t } = useLang();
   const [difficulty, setDifficulty] = useState('all');
   const [wordIdx, setWordIdx] = useState(0);
+  const [showBrowser, setShowBrowser] = useState(false);
+  const [browserDiff, setBrowserDiff] = useState('all');
 
   const filtered = difficulty === 'all'
     ? DECONSTRUCT_WORDS
@@ -51,92 +46,52 @@ export default function DeconstructPage() {
     medium: t('dec_difficulty_medium'), hard: t('dec_difficulty_hard'),
   };
 
+  const DIFF_COLORS = { easy: '#4caf50', medium: '#FCB75C', hard: '#FC5C7D' };
+
   const resetWord = (w) => {
     setLetters(initLetters(w));
     setChecked(false); setResult(null); setRevealed(false);
   };
 
-  const pickWord = (i) => { setWordIdx(i); resetWord(filtered[i]); };
-  const nextWord = () => { const n = (wordIdx + 1) % filtered.length; pickWord(n); };
-
-  // ── Drag ──────────────────────────────────────────────────
-  const onDragStart = (e, id) => {
-    dragRef.current = id;
-    e.dataTransfer.effectAllowed = 'move';
+  // Pick by index into DECONSTRUCT_WORDS (global), then close modal
+  const pickWord = (globalIdx) => {
+    const w = DECONSTRUCT_WORDS[globalIdx];
+    const fi = filtered.indexOf(w);
+    if (fi !== -1) {
+      setWordIdx(fi);
+    } else {
+      setDifficulty('all');
+      setWordIdx(DECONSTRUCT_WORDS.indexOf(w));
+    }
+    resetWord(w);
+    setShowBrowser(false);
   };
 
-  const moveLetter = (id, dest) => {
-    setLetters(prev => prev.map(l => l.id === id ? { ...l, placed: dest } : l));
-    setChecked(false); setResult(null);
-  };
+  const nextWord = () => { const n = (wordIdx + 1) % filtered.length; setWordIdx(n); resetWord(filtered[n]); };
 
-  // Drop into a segment zone
-  const onDropZone = (e, zoneSegIdx) => {
-    e.preventDefault();
-    if (dragRef.current) { moveLetter(dragRef.current, zoneSegIdx); dragRef.current = null; }
-  };
-
-  // Drop back to word row (unplace)
-  const onDropWord = (e) => {
-    e.preventDefault();
-    if (dragRef.current) { moveLetter(dragRef.current, null); dragRef.current = null; }
-  };
-
-  // Click: cycle unplaced -> placed in correct zone -> unplaced
-  const onClickLetter = (id) => {
-    // const letter = letters.find(l => l.id === id);
-    // if (!letter) return;
-    // if (letter.placed !== null) {
-    //   moveLetter(id, null);
-    // } else {
-    //   moveLetter(id, letter.segIdx); // shortcut: place into correct zone on click
-    // }
-  };
-
-  // Click placed letter in zone to return it
+  const onDragStart = (e, id) => { dragRef.current = id; e.dataTransfer.effectAllowed = 'move'; };
+  const moveLetter = (id, dest) => { setLetters(prev => prev.map(l => l.id === id ? { ...l, placed: dest } : l)); setChecked(false); setResult(null); };
+  const onDropZone = (e, si) => { e.preventDefault(); if (dragRef.current) { moveLetter(dragRef.current, si); dragRef.current = null; } };
+  const onDropWord = (e) => { e.preventDefault(); if (dragRef.current) { moveLetter(dragRef.current, null); dragRef.current = null; } };
   const onClickPlaced = (id) => moveLetter(id, null);
 
-  // ── Check / reveal ────────────────────────────────────────
   const check = () => {
     let ok = true;
     word.segments.forEach((seg, si) => {
-      const inZone = letters.filter(l => l.placed === si);
-      const formed = inZone.map(l => l.char).join('');
-      if (formed !== seg.letters) ok = false;
+      if (letters.filter(l => l.placed === si).map(l => l.char).join('') !== seg.letters) ok = false;
     });
-    // Also fail if any letter is still unplaced
     if (letters.some(l => l.placed === null)) ok = false;
-    setChecked(true);
-    setResult(ok ? 'correct' : 'wrong');
+    setChecked(true); setResult(ok ? 'correct' : 'wrong');
   };
 
-  const reveal = () => {
-    setLetters(prev => prev.map(l => ({ ...l, placed: l.segIdx })));
-    setRevealed(true); setChecked(true); setResult('correct');
-  };
+  const reveal = () => { setLetters(prev => prev.map(l => ({ ...l, placed: l.segIdx }))); setRevealed(true); setChecked(true); setResult('correct'); };
 
-  // ── Derived state ─────────────────────────────────────────
-  const getSegmentMeaning = (seg) => {
-    if (!seg.meanings) return seg.meaning || '';
-    return seg.meanings[lang] || seg.meanings.vi || seg.meanings.en || '';
-  };
+  const getSegmentMeaning = (seg) => seg.meanings ? (seg.meanings[lang] || seg.meanings.vi || seg.meanings.en || '') : (seg.meaning || '');
+  const getWordTranslation = () => lang === 'en' ? '' : (word.translations?.[lang] || word.translations?.vi || '');
+  const getHint = () => { if (!word.hint) return ''; if (typeof word.hint === 'string') return word.hint; return word.hint[lang] || word.hint.vi || word.hint.en || ''; };
+  const isZoneCorrect = (si) => letters.filter(l => l.placed === si).map(l => l.char).join('') === word.segments[si].letters;
 
-  const getWordTranslation = () => {
-    if (lang === 'en') return '';
-    return word.translations?.[lang] || word.translations?.vi || '';
-  };
-
-  const getHint = () => {
-    if (!word.hint) return '';
-    if (typeof word.hint === 'string') return word.hint;
-    return word.hint[lang] || word.hint.vi || word.hint.en || '';
-  };
-
-  // Is a segment zone correct?
-  const isZoneCorrect = (si) => {
-    const inZone = letters.filter(l => l.placed === si);
-    return inZone.map(l => l.char).join('') === word.segments[si].letters;
-  };
+  const browserFiltered = browserDiff === 'all' ? DECONSTRUCT_WORDS : DECONSTRUCT_WORDS.filter(w => w.difficulty === browserDiff);
 
   return (
     <div className={styles.page + ' page-enter'}>
@@ -148,56 +103,33 @@ export default function DeconstructPage() {
       </div>
 
       <div className="container">
-        {/* Difficulty */}
-        <div className={styles.filters}>
-          {DIFF_KEYS.map(d => (
-            <button key={d} className={`${styles.chip} ${difficulty === d ? styles.chipActive : ''}`}
-              onClick={() => { setDifficulty(d); setWordIdx(0); resetWord((d === 'all' ? DECONSTRUCT_WORDS : DECONSTRUCT_WORDS.filter(w => w.difficulty === d))[0]); }}>
-              {DIFF_LABELS[d]}
-            </button>
-          ))}
+        <div className={styles.topBar}>
+          <div className={styles.filters}>
+            {DIFF_KEYS.map(d => (
+              <button key={d} className={`${styles.chip} ${difficulty === d ? styles.chipActive : ''}`}
+                onClick={() => { const nf = d === 'all' ? DECONSTRUCT_WORDS : DECONSTRUCT_WORDS.filter(w => w.difficulty === d); setDifficulty(d); setWordIdx(0); resetWord(nf[0]); }}>
+                {DIFF_LABELS[d]}
+              </button>
+            ))}
+          </div>
+          <button className={styles.browseBtn} onClick={() => setShowBrowser(true)}>
+            All words ({DECONSTRUCT_WORDS.length})
+          </button>
         </div>
 
-        {/* Word picker */}
-        <div className={styles.wordRow}>
-          {filtered.map((w, i) => (
-            <button key={w.id}
-              className={`${styles.wordChip} ${i === wordIdx % filtered.length ? styles.wordChipActive : ''}`}
-              onClick={() => pickWord(i)}>
-              {w.word}
-            </button>
-          ))}
-        </div>
-
-        {/* Game area */}
         <div className={styles.game}>
+          {getWordTranslation() && <div className={styles.wordTranslation}>{getWordTranslation()}</div>}
 
-          {/* Translation */}
-          {getWordTranslation() && (
-            <div className={styles.wordTranslation}>{getWordTranslation()}</div>
-          )}
-
-          {/* THE WORD — individual letter tiles in order, dimmed when placed */}
-          <div className={styles.wordStrip}
-            onDragOver={e => e.preventDefault()}
-            onDrop={onDropWord}>
+          <div className={styles.wordStrip} onDragOver={e => e.preventDefault()} onDrop={onDropWord}>
             <div className={styles.wordTileRow}>
               {letters.map((letter) => {
                 const isPlaced = letter.placed !== null;
                 const segType = word.segments[letter.segIdx]?.type;
                 return (
-                  <button
-                    key={letter.id}
-                    className={[
-                      styles.letterTile,
-                      isPlaced ? styles.letterDim : styles.letterActive,
-                      isPlaced ? '' : styles['letterHover_' + segType],
-                    ].join(' ')}
+                  <button key={letter.id}
+                    className={[styles.letterTile, isPlaced ? styles.letterDim : styles.letterActive, isPlaced ? '' : styles['letterHover_' + segType]].join(' ')}
                     draggable={!isPlaced}
-                    onDragStart={e => !isPlaced && onDragStart(e, letter.id)}
-                    onClick={() => onClickLetter(letter.id)}
-                    title={isPlaced ? t('dec_drop_here') : letter.char}
-                  >
+                    onDragStart={e => !isPlaced && onDragStart(e, letter.id)}>
                     {letter.char}
                   </button>
                 );
@@ -206,53 +138,33 @@ export default function DeconstructPage() {
             <div className={styles.wordStripLabel}>{t('dec_pool_label')}</div>
           </div>
 
-          {/* Hint */}
           <div className={styles.hint}>{t('dec_hint_label')}: {getHint()}</div>
 
-          {/* Drop zones */}
           <div className={styles.zones}>
             {word.segments.map((seg, si) => {
               const info = TYPE_LABELS[seg.type];
-              const inZone = letters.filter(l => l.placed === si);
-              // Sort by original position in word
-              inZone.sort((a, b) => {
-                const ai = letters.indexOf(a);
-                const bi = letters.indexOf(b);
-                return ai - bi;
-              });
+              const inZone = [...letters.filter(l => l.placed === si)].sort((a, b) => letters.indexOf(a) - letters.indexOf(b));
               const correct = checked && isZoneCorrect(si);
               const wrong = checked && !isZoneCorrect(si);
-
               return (
                 <div key={si}
                   className={`${styles.zone} ${styles['zone_' + seg.type]} ${correct ? styles.zoneOk : ''} ${wrong ? styles.zoneErr : ''}`}
-                  onDragOver={e => e.preventDefault()}
-                  onDrop={e => onDropZone(e, si)}>
-
+                  onDragOver={e => e.preventDefault()} onDrop={e => onDropZone(e, si)}>
                   <div className={styles.zoneHead}>
                     <span className={`${styles.typeTag} ${styles['tag_' + TYPE_CLS[seg.type]]}`}>{info.en}</span>
                     <span className={styles.zoneNative}>{info.native}</span>
                   </div>
-
                   <div className={styles.zoneLetters}>
                     {inZone.map(letter => (
-                      <button
-                        key={letter.id}
+                      <button key={letter.id}
                         className={`${styles.letterTile} ${styles['letterPlaced_' + seg.type]}`}
-                        draggable
-                        onDragStart={e => onDragStart(e, letter.id)}
-                        onClick={() => onClickPlaced(letter.id)}
-                        title="Click to return"
-                      >
+                        draggable onDragStart={e => onDragStart(e, letter.id)}
+                        onClick={() => onClickPlaced(letter.id)}>
                         {letter.char}
                       </button>
                     ))}
-                    {inZone.length === 0 && (
-                      <span className={styles.zonePh}>{t('dec_drop_here')}</span>
-                    )}
+                    {inZone.length === 0 && <span className={styles.zonePh}>{t('dec_drop_here')}</span>}
                   </div>
-
-                  {/* Meaning revealed after correct or reveal */}
                   {(revealed || correct) && (
                     <div className={styles.zoneMeaning}>
                       <span className={styles.zoneMeaningWord}>{seg.letters}</span>
@@ -265,14 +177,12 @@ export default function DeconstructPage() {
             })}
           </div>
 
-          {/* Result banner */}
           {result && (
             <div className={`${styles.resultBanner} ${result === 'correct' ? styles.resultOk : styles.resultErr}`}>
               {result === 'correct' ? t('dec_result_correct') : t('dec_result_wrong')}
             </div>
           )}
 
-          {/* Actions */}
           <div className={styles.actions}>
             <button className={styles.btnPrimary} onClick={check}>{t('dec_btn_check')}</button>
             <button className={styles.btnGhost} onClick={reveal}>{t('dec_btn_reveal')}</button>
@@ -281,7 +191,6 @@ export default function DeconstructPage() {
           </div>
         </div>
 
-        {/* Legend */}
         <div className={styles.legend}>
           {Object.entries(TYPE_LABELS).map(([key, val]) => (
             <div key={key} className={styles.legendItem}>
@@ -291,6 +200,40 @@ export default function DeconstructPage() {
           ))}
         </div>
       </div>
+
+      {/* Word Browser Modal */}
+      {showBrowser && (
+        <div className={styles.overlay} onClick={() => setShowBrowser(false)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHead}>
+              <h2 className={styles.modalTitle}>All Words</h2>
+              <button className={styles.modalClose} onClick={() => setShowBrowser(false)}>&#x2715;</button>
+            </div>
+            <div className={styles.modalFilters}>
+              {DIFF_KEYS.map(d => (
+                <button key={d} className={`${styles.chip} ${browserDiff === d ? styles.chipActive : ''}`} onClick={() => setBrowserDiff(d)}>
+                  {DIFF_LABELS[d]}
+                </button>
+              ))}
+            </div>
+            <div className={styles.wordGrid}>
+              {browserFiltered.map((w) => (
+                <button key={w.id}
+                  className={`${styles.wordCard} ${w.id === word.id ? styles.wordCardActive : ''}`}
+                  onClick={() => pickWord(DECONSTRUCT_WORDS.indexOf(w))}>
+                  <span className={styles.wordCardWord}>{w.word}</span>
+                  <span className={styles.wordCardTrans}>
+                    {lang === 'en' ? '' : (w.translations?.[lang] || w.translations?.vi || '')}
+                  </span>
+                  <span className={styles.wordCardDiff} style={{ color: DIFF_COLORS[w.difficulty] }}>
+                    {DIFF_LABELS[w.difficulty]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
