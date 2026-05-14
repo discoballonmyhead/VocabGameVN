@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Space+Mono:wght@400;700&family=Nunito:wght@400;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:         #0D0D14;
+  --surface:    #13131E;
+  --surface-2:  #1A1A2E;
+  --surface-3:  #222236;
+  --border:     rgba(255,255,255,0.07);
+  --border-strong: rgba(255,255,255,0.13);
+
+  --accent:     #7C5CFC;
+  --accent-2:   #FC5C7D;
+  --accent-3:   #5CF0FC;
+  --accent-4:   #FCB75C;
+
+  --prefix-color: #FC5C7D;
+  --suffix-color: #5CF0FC;
+
+  --text:   #F0EEF8;
+  --text-2: #A09CB8;
+  --text-3: #6B6885;
+
+  --radius:    10px;
+  --radius-lg: 18px;
+  --nav-h:     56px;
+
+  color-scheme: dark;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Nunito', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  /* subtle noise */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+.container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+
+h1,h2,h3 { font-family: 'Syne', sans-serif; line-height: 1.15; }
+
+button { font-family: inherit; }
+
+input, textarea { font-family: inherit; }
+
+a { color: inherit; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-enter { animation: fadeUp 0.3s ease; }
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
